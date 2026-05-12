@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>주간 학습 보고서</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4a90e2">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="학습보고서">
+    <link rel="apple-touch-icon" href="icon-192.svg">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans KR', Arial, sans-serif;
+            background: #f0f4f8;
+            color: #2d3748;
+            min-height: 100vh;
+            -webkit-text-size-adjust: 100%;
+        }
+
+        /* ===== 헤더 ===== */
+        .header {
+            background: linear-gradient(135deg, #4a90e2 0%, #2c6fba 100%);
+            color: white;
+            padding: 16px 20px 14px;
+            padding-top: calc(16px + env(safe-area-inset-top));
+            position: sticky; top: 0; z-index: 200;
+            box-shadow: 0 2px 12px rgba(74,144,226,0.35);
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        }
+        .header h1 { font-size: 19px; font-weight: 700; }
+        .header p  { font-size: 12px; margin-top: 3px; opacity: 0.82; }
+
+        .save-indicator {
+            font-size: 12px; color: rgba(255,255,255,0.95); font-weight: 600;
+            background: rgba(255,255,255,0.2); border-radius: 20px;
+            padding: 4px 11px; white-space: nowrap;
+            opacity: 0; transition: opacity 0.35s;
+            pointer-events: none; flex-shrink: 0;
+        }
+        .save-indicator.visible { opacity: 1; }
+
+        /* ===== 컨테이너 ===== */
+        .container {
+            max-width: 720px; margin: 0 auto;
+            padding: 16px 14px calc(40px + env(safe-area-inset-bottom));
+        }
+
+        /* ===== 카드 ===== */
+        .card {
+            background: white; border-radius: 16px; padding: 18px 16px;
+            margin-bottom: 14px; border: 1.5px solid #c8d5e2;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        }
+        .card-label {
+            font-size: 11px; font-weight: 700; color: #a0aec0;
+            letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 14px;
+        }
+
+        /* ===== 학생 정보 카드 헤더 ===== */
+        .card-header-row {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .card-header-row .card-label { margin-bottom: 0; }
+
+        /* ===== 고정 토글 ===== */
+        .lock-toggle {
+            display: flex; align-items: center; gap: 6px;
+            cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+        .lock-toggle-text { font-size: 12px; font-weight: 600; color: #718096; transition: color 0.2s; }
+        .lock-toggle-text.is-locked { color: #4a90e2; }
+        .toggle-switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; }
+        .toggle-switch input { display: none; }
+        .toggle-track {
+            position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: #e2e8f0;
+            border-radius: 11px; transition: background 0.2s;
+        }
+        .toggle-track::after {
+            content: ''; position: absolute; top: 3px; left: 3px;
+            width: 16px; height: 16px; background: white; border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: transform 0.2s;
+        }
+        .toggle-switch input:checked + .toggle-track { background: #4a90e2; }
+        .toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); }
+
+        /* ===== 학생 정보 필드 ===== */
+        .fields-row { display: flex; gap: 12px; margin-bottom: 12px; }
+        .field-wrap { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+        .field-wrap label { font-size: 13px; font-weight: 600; color: #4a5568; }
+        .field-wrap input {
+            padding: 12px 13px; border: 2px solid #e2e8f0; border-radius: 10px;
+            font-size: 16px; color: #2d3748; background: #f7fafc; width: 100%;
+            transition: border-color 0.18s; -webkit-appearance: none; appearance: none;
+        }
+        .field-wrap input:focus { outline: none; border-color: #4a90e2; background: white; }
+        .field-wrap input.has-error { border-color: #fc8181; background: #fff5f5; }
+        .field-error { font-size: 12px; color: #e53e3e; display: none; }
+        .field-error.visible { display: block; }
+
+        /* ===== 주차 선택 (네이티브 select) ===== */
+        .week-select {
+            width: 100%; padding: 12px 36px 12px 13px;
+            border: 2px solid #e2e8f0; border-radius: 10px;
+            font-size: 16px; color: #2d3748; background: #f7fafc;
+            -webkit-appearance: none; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23a0aec0' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 13px center;
+            cursor: pointer; transition: border-color 0.18s;
+        }
+        .week-select:focus { outline: none; border-color: #4a90e2; background-color: white; }
+
+        /* ===== 요일 탭 ===== */
+        .day-tabs {
+            display: flex; gap: 5px; background: #edf2f7;
+            border-radius: 13px; padding: 5px; margin-bottom: 16px;
+        }
+        .day-tab {
+            flex: 1; padding: 10px 4px; border: none;
+            background: transparent; border-radius: 9px; font-size: 15px;
+            font-weight: 600; color: #718096; cursor: pointer; text-align: center;
+            min-height: 44px;
+            transition: background 0.15s, color 0.15s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .day-tab.active { background: white; color: #4a90e2; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+
+        .day-panel { display: none; }
+        .day-panel.active { display: block; }
+
+        /* ===== 시간대 블록 ===== */
+        .slot-block {
+            border: 1.5px solid #d4dde8; border-radius: 13px;
+            margin-bottom: 11px; overflow: hidden; background: white;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .slot-block.open { border-color: #4a90e2; box-shadow: 0 0 0 3px rgba(74,144,226,0.12); }
+        .slot-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 15px; cursor: pointer; user-select: none;
+            min-height: 54px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .slot-header:active { background: #f7fafc; }
+        .slot-title-group { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+        .slot-name      { font-size: 16px; font-weight: 700; color: #2d3748; }
+        .slot-timerange { font-size: 11px; color: #b0bec5; }
+        .slot-right     { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .slot-usage {
+            font-size: 12px; font-weight: 600; color: #718096;
+            background: #f0f4f8; border-radius: 20px; padding: 3px 10px;
+            transition: background 0.2s, color 0.2s; white-space: nowrap;
+        }
+        .slot-usage.filled { background: #c6f6d5; color: #276749; }
+        .slot-usage.warn   { background: #fef3cd; color: #b7791f; }
+        .slot-usage.over   { background: #fed7d7; color: #c53030; }
+        .slot-arrow { font-size: 11px; color: #cbd5e0; transition: transform 0.2s; display: inline-block; }
+        .slot-block.open .slot-arrow { transform: rotate(180deg); }
+
+        .slot-body {
+            border-top: 1.5px solid #d4dde8; padding: 13px 14px;
+            background: #f9fafb; display: none;
+        }
+        .slot-block.open .slot-body { display: block; border-top-color: #4a90e2; }
+
+        .progress-wrap { background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden; margin-bottom: 12px; }
+        .progress-bar  { height: 100%; border-radius: 4px; background: #4a90e2; transition: width 0.25s, background 0.25s; }
+        .progress-bar.filled { background: #48bb78; }
+        .progress-bar.warn   { background: #ed8936; }
+        .progress-bar.over   { background: #e53e3e; }
+
+        .slot-over-msg {
+            display: none; background: #fff5f5; border: 1px solid #fed7d7;
+            border-radius: 8px; padding: 9px 12px; font-size: 13px;
+            color: #c53030; font-weight: 500; margin-bottom: 11px; line-height: 1.5;
+        }
+        .slot-over-msg.visible { display: block; }
+
+        .slot-full-msg {
+            display: none; text-align: center;
+            background: linear-gradient(135deg, #f0fff4 0%, #e6ffed 100%);
+            border: 1.5px solid #9ae6b4; border-radius: 10px;
+            padding: 14px 12px; font-size: 14px; font-weight: 700;
+            color: #276749; line-height: 1.8;
+        }
+        .slot-full-msg.visible { display: block; }
+        .slot-full-msg .full-sub { display: block; font-size: 12px; font-weight: 500; color: #48a17a; margin-top: 2px; }
+
+        /* ===== 활동 카드 ===== */
+        .activity-list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 10px; }
+        .activity-card {
+            background: white; border: 1.5px solid #e2e8f0; border-radius: 10px;
+            padding: 12px 42px 12px 12px; position: relative;
+        }
+        .btn-remove {
+            position: absolute; top: 10px; right: 10px; width: 32px; height: 32px;
+            border: none; background: #fed7d7; color: #c53030; border-radius: 50%;
+            font-size: 14px; font-weight: 700; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-remove:active { background: #fc8181; }
+
+        .act-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 9px; }
+        .act-row:last-child { margin-bottom: 0; }
+        .act-field { display: flex; flex-direction: column; gap: 4px; }
+        .act-field label { font-size: 10px; font-weight: 700; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.3px; }
+        .act-field select, .act-field input[type="text"] {
+            padding: 9px 10px; border: 1.5px solid #e2e8f0; border-radius: 8px;
+            font-size: 16px; color: #2d3748; background: white;
+            -webkit-appearance: none; appearance: none;
+            transition: border-color 0.15s; width: 100%;
+        }
+        .act-field select:focus, .act-field input[type="text"]:focus { outline: none; border-color: #4a90e2; }
+        .act-field select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23a0aec0' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px;
+        }
+        .act-field.f-subject { flex: 2; min-width: 0; }
+        .act-field.f-type    { flex: 1; min-width: 55px; }
+        .act-field.f-content { flex: 1; }
+
+        /* ===== 시간 스테퍼 (−/숫자/+) ===== */
+        .f-time-step { flex: 0 0 118px; display: flex; flex-direction: column; gap: 4px; }
+        .stepper-row {
+            display: flex; align-items: stretch;
+            border: 1.5px solid #e2e8f0; border-radius: 8px; overflow: hidden;
+        }
+        .stepper-btn {
+            flex: 0 0 36px; height: 46px; border: none; background: #f0f4f8;
+            font-size: 22px; font-weight: 300; color: #4a90e2;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.1s;
+        }
+        .stepper-btn:active { background: #dce8f5; }
+        .stepper-inp {
+            flex: 1; height: 46px; border: none;
+            border-left: 1.5px solid #e2e8f0; border-right: 1.5px solid #e2e8f0;
+            text-align: center; font-size: 16px; font-weight: 700; color: #2d3748;
+            background: white; padding: 0; min-width: 0;
+            -webkit-appearance: none; -moz-appearance: textfield; appearance: textfield;
+        }
+        .stepper-inp::-webkit-inner-spin-button,
+        .stepper-inp::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .stepper-inp:focus { outline: none; }
+
+        /* ===== 활동 추가 버튼 ===== */
+        .btn-add {
+            width: 100%; padding: 13px; border: 2px dashed #bee3f8; background: transparent;
+            border-radius: 10px; font-size: 14px; font-weight: 600; color: #63b3ed;
+            cursor: pointer; min-height: 48px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-add:active:not(:disabled) { background: #ebf8ff; }
+        .btn-add:disabled { color: #cbd5e0; border-color: #e2e8f0; cursor: not-allowed; }
+
+        /* ===== 하단 버튼 ===== */
+        .btn-excel {
+            display: block; width: 100%; margin-top: 14px;
+            padding: 16px; border: none; background: #4a90e2;
+            border-radius: 14px; font-size: 16px; font-weight: 700;
+            color: white; cursor: pointer; text-align: center;
+            box-shadow: 0 3px 10px rgba(74,144,226,0.38);
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-excel:active { background: #2c6fba; }
+        .btn-reset {
+            display: block; width: 100%; margin-top: 8px;
+            padding: 14px; border: 2px solid #fed7d7; background: transparent;
+            border-radius: 14px; font-size: 15px; font-weight: 700;
+            color: #e53e3e; cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-reset:active { background: #fff5f5; }
+
+        /* ===== 도움말 ===== */
+        .help-card { padding: 0; overflow: hidden; }
+        .help-summary {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 15px 18px; font-size: 14px; font-weight: 700; color: #4a5568;
+            cursor: pointer; user-select: none; list-style: none; min-height: 50px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .help-summary::-webkit-details-marker { display: none; }
+        .help-chevron { font-size: 11px; color: #a0aec0; transition: transform 0.2s; }
+        details.help-card[open] .help-chevron { transform: rotate(180deg); }
+        .help-body { padding: 0 18px 18px; border-top: 1.5px solid #e2e8f0; }
+        .help-platform { margin-top: 16px; }
+        .help-platform-name { font-size: 13px; font-weight: 700; color: #4a5568; display: block; margin-bottom: 7px; }
+        .help-platform ol { padding-left: 20px; margin: 0; }
+        .help-platform li { font-size: 13px; color: #718096; line-height: 1.9; }
+        .help-platform li strong { color: #4a5568; }
+        .help-note {
+            margin-top: 16px; padding: 10px 12px;
+            background: #fffbeb; border: 1px solid #fbd38d; border-radius: 8px;
+            font-size: 12px; color: #92400e; font-weight: 500; line-height: 1.6;
+        }
+
+        @media (max-width: 480px) { .fields-row { flex-direction: column; } }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <div>
+            <h1>주간 학습 보고서</h1>
+            <p>매일 학습 내용을 입력하세요</p>
+        </div>
+        <span class="save-indicator" id="save-indicator">✓ 저장됨</span>
+    </header>
+
+    <!-- JS가 정상 실행되면 아래 배너는 즉시 숨겨집니다 -->
+    <div id="js-check" style="background:#c53030;color:white;padding:14px 16px;font-size:13px;font-weight:600;text-align:center;line-height:1.7">
+        JavaScript가 실행되지 않고 있습니다.<br>
+        <span style="font-weight:400;font-size:12px">&#x2605; Safari 앱에서 파일을 직접 열어주세요 &#x2605;<br>파일 앱에서 파일을 길게 눌러 "공유 &rarr; Safari로 열기" 선택</span>
+    </div>
+
+    <div class="container">
+
+        <!-- 학생 정보 -->
+        <section class="card" aria-label="학생 정보">
+            <div class="card-header-row">
+                <div class="card-label">학생 정보</div>
+                <label class="lock-toggle" title="켜면 초기화 시 학번·이름을 유지합니다">
+                    <span class="lock-toggle-text is-locked" id="lock-label">🔒 학번·이름 고정됨</span>
+                    <span class="toggle-switch">
+                        <input type="checkbox" id="chk-lock-student" checked onchange="onLockToggle()">
+                        <span class="toggle-track"></span>
+                    </span>
+                </label>
+            </div>
+
+            <div class="fields-row">
+                <div class="field-wrap">
+                    <label for="inp-id">학번 (5자리)</label>
+                    <input id="inp-id" type="text" inputmode="numeric"
+                           pattern="[0-9]{5}" maxlength="5"
+                           placeholder="예: 20623" autocomplete="off">
+                    <span class="field-error" id="err-id">학번은 5자리 숫자여야 합니다.</span>
+                </div>
+                <div class="field-wrap">
+                    <label for="inp-name">이름</label>
+                    <input id="inp-name" type="text" placeholder="예: 키위홍" autocomplete="off">
+                    <span class="field-error" id="err-name">이름을 입력해주세요.</span>
+                </div>
+            </div>
+
+            <div class="field-wrap">
+                <label for="sel-week">주차</label>
+                <select id="sel-week" class="week-select">
+                    <option value="-1">주차를 선택하세요</option>
+                </select>
+            </div>
+        </section>
+
+        <!-- 요일별 학습 입력 -->
+        <section class="card" aria-label="요일별 학습 입력">
+            <div class="card-label">요일별 학습 입력</div>
+            <div class="day-tabs" role="tablist">
+                <button class="day-tab active" role="tab" data-day="0" aria-selected="true">월</button>
+                <button class="day-tab"        role="tab" data-day="1" aria-selected="false">화</button>
+                <button class="day-tab"        role="tab" data-day="2" aria-selected="false">수</button>
+                <button class="day-tab"        role="tab" data-day="3" aria-selected="false">목</button>
+                <button class="day-tab"        role="tab" data-day="4" aria-selected="false">금</button>
+            </div>
+            <div id="panel-0" class="day-panel active" role="tabpanel"></div>
+            <div id="panel-1" class="day-panel"        role="tabpanel"></div>
+            <div id="panel-2" class="day-panel"        role="tabpanel"></div>
+            <div id="panel-3" class="day-panel"        role="tabpanel"></div>
+            <div id="panel-4" class="day-panel"        role="tabpanel"></div>
+        </section>
+
+        <button class="btn-excel" onclick="exportExcel()">📊 엑셀로 저장</button>
+        <button class="btn-reset" onclick="resetWeek()">🗑 이번 주 초기화</button>
+
+        <details class="card help-card" style="margin-top:14px">
+            <summary class="help-summary">
+                <span>📱 홈 화면에 추가하는 법</span>
+                <span class="help-chevron">▼</span>
+            </summary>
+            <div class="help-body">
+                <div class="help-platform">
+                    <span class="help-platform-name">🍎 iPhone / iPad — Safari</span>
+                    <ol>
+                        <li>Safari로 이 파일을 열기</li>
+                        <li>하단 가운데 <strong>공유 버튼 (□↑)</strong> 탭</li>
+                        <li><strong>홈 화면에 추가</strong> 선택</li>
+                        <li>이름 확인 후 오른쪽 위 <strong>추가</strong> 탭</li>
+                    </ol>
+                </div>
+                <div class="help-platform">
+                    <span class="help-platform-name">🤖 Android — Chrome</span>
+                    <ol>
+                        <li>Chrome으로 이 파일을 열기</li>
+                        <li>주소창 오른쪽 <strong>⋮ 메뉴</strong> 탭</li>
+                        <li><strong>홈 화면에 추가</strong> 후 <strong>추가</strong> 확인</li>
+                    </ol>
+                </div>
+                <div class="help-platform">
+                    <span class="help-platform-name">📱 Android — 삼성 인터넷</span>
+                    <ol>
+                        <li>삼성 인터넷으로 이 파일을 열기</li>
+                        <li>하단 <strong>≡ 메뉴</strong> 탭</li>
+                        <li><strong>페이지 추가 → 홈 화면</strong> 선택</li>
+                    </ol>
+                </div>
+                <p class="help-note">⚠️ 항상 같은 아이콘(같은 브라우저)으로 열어야 데이터가 유지됩니다.</p>
+            </div>
+        </details>
+
+    </div>
+
+    <script>
+        /* JS가 실행되면 즉시 경고 배너 숨김 (파싱 성공 확인용) */
+        document.getElementById('js-check').style.display = 'none';
+
+        /* ===== 상수 ===== */
+        const SLOTS = [
+            { id: 'morning', label: '아침면학', timeRange: '07:20~08:05', maxMin: 45  },
+            { id: 's1',      label: 'S1',       timeRange: '16:40~17:30', maxMin: 50  },
+            { id: 's2',      label: 'S2',       timeRange: '18:40~20:20', maxMin: 100 },
+            { id: 's3',      label: 'S3',       timeRange: '20:30~21:50', maxMin: 80  },
+            { id: 's4',      label: 'S4',       timeRange: '22:00~23:20', maxMin: 80  },
+        ];
+        const SUBJECTS = ['국어', '수학', '영어', '전공어', '사탐', '과탐', '수행'];
+        const TYPES    = ['In', 'Out', '기타'];
+
+        /* ===== 2026 주차 생성 ===== */
+        function generateWeeks() {
+            const weeks = [];
+            const M = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+            let mon = new Date(2026, 2, 2);
+            while (mon.getFullYear() === 2026 && mon.getMonth() <= 11) {
+                const fri   = new Date(mon); fri.setDate(mon.getDate() + 4);
+                const month = mon.getMonth();
+                const weekN = Math.ceil(mon.getDate() / 7);
+                weeks.push({
+                    label:      `${M[month]} ${weekN}주차 (${mon.getMonth()+1}/${mon.getDate()}~${fri.getMonth()+1}/${fri.getDate()})`,
+                    shortLabel: `${M[month]} ${weekN}주차`,
+                    mondayDate: new Date(mon),
+                    fridayDate: new Date(fri),
+                });
+                mon = new Date(mon); mon.setDate(mon.getDate() + 7);
+            }
+            return weeks;
+        }
+        const WEEKS = generateWeeks();
+        let selectedWeekIdx = -1;
+
+        function findCurrentWeekIdx() {
+            const today = new Date(); today.setHours(0,0,0,0);
+            for (let i = 0; i < WEEKS.length; i++) {
+                if (today >= WEEKS[i].mondayDate && today <= WEEKS[i].fridayDate) return i;
+            }
+            for (let i = 0; i < WEEKS.length; i++) {
+                if (WEEKS[i].mondayDate > today) return i;
+            }
+            return 0;
+        }
+
+        /* ===== 주차 select 빌드 ===== */
+        function buildWeekSelect() {
+            const sel    = document.getElementById('sel-week');
+            const curIdx = findCurrentWeekIdx();
+            WEEKS.forEach((w, i) => {
+                const opt = document.createElement('option');
+                opt.value       = String(i);
+                opt.textContent = w.label;
+                if (i === curIdx) opt.defaultSelected = false; // 기본 선택 없음 (사용자가 직접 선택)
+                sel.appendChild(opt);
+            });
+            sel.addEventListener('change', () => {
+                selectedWeekIdx = parseInt(sel.value, 10);
+                scheduleSave();
+            });
+        }
+
+        /* ===== 시간 스테퍼 (ScrollPicker 대체) ===== */
+        function createTimeStepper(maxMin, onChange, initialMinutes = 0) {
+            const initVal = Math.max(0, Math.min(Math.round(initialMinutes) || 0, maxMin));
+
+            const wrap = document.createElement('div');
+            wrap.className       = 'act-field f-time-step';
+            wrap.dataset.minutes = String(initVal);
+
+            const lbl = document.createElement('label');
+            lbl.textContent = '시간(분)';
+            wrap.appendChild(lbl);
+
+            const row = document.createElement('div');
+            row.className = 'stepper-row';
+
+            const btnMinus = document.createElement('button');
+            btnMinus.type      = 'button';
+            btnMinus.className = 'stepper-btn';
+            btnMinus.textContent = '−';
+            btnMinus.setAttribute('aria-label', '1분 감소');
+
+            const inp = document.createElement('input');
+            inp.type      = 'number';
+            inp.inputMode = 'numeric';
+            inp.className = 'stepper-inp';
+            inp.min   = '0';
+            inp.max   = String(maxMin);
+            inp.value = String(initVal);
+
+            const btnPlus = document.createElement('button');
+            btnPlus.type      = 'button';
+            btnPlus.className = 'stepper-btn';
+            btnPlus.textContent = '+';
+            btnPlus.setAttribute('aria-label', '1분 증가');
+
+            function setValue(val) {
+                const clamped = Math.max(0, Math.min(Math.round(val) || 0, maxMin));
+                inp.value            = String(clamped);
+                wrap.dataset.minutes = String(clamped);
+                if (onChange) onChange(clamped);
+            }
+
+            btnMinus.addEventListener('click', () => setValue((parseInt(inp.value, 10) || 0) - 1));
+            btnPlus.addEventListener('click',  () => setValue((parseInt(inp.value, 10) || 0) + 1));
+            inp.addEventListener('change', () => setValue(parseInt(inp.value, 10) || 0));
+            inp.addEventListener('blur',   () => setValue(parseInt(inp.value, 10) || 0));
+
+            /* 길게 누르면 빠르게 증감 */
+            let fastTimer, fastInterval;
+            function startFast(delta) {
+                fastTimer = setTimeout(() => {
+                    fastInterval = setInterval(() => setValue((parseInt(inp.value,10)||0) + delta), 80);
+                }, 400);
+            }
+            function stopFast() { clearTimeout(fastTimer); clearInterval(fastInterval); }
+
+            [btnMinus, btnPlus].forEach((btn, i) => {
+                const delta = i === 0 ? -1 : 1;
+                btn.addEventListener('pointerdown',   () => startFast(delta));
+                btn.addEventListener('pointerup',     stopFast);
+                btn.addEventListener('pointercancel', stopFast);
+                btn.addEventListener('pointerleave',  stopFast);
+            });
+
+            row.append(btnMinus, inp, btnPlus);
+            wrap.appendChild(row);
+            return wrap;
+        }
+
+        /* ===== 시간대 블록 생성 ===== */
+        function buildSlotBlock(dayIdx, slot) {
+            const block = document.createElement('div');
+            block.className    = 'slot-block';
+            block.dataset.day  = dayIdx;
+            block.dataset.slot = slot.id;
+
+            const header = document.createElement('div');
+            header.className = 'slot-header';
+            header.addEventListener('click', () => block.classList.toggle('open'));
+
+            const titleGroup = document.createElement('div');
+            titleGroup.className = 'slot-title-group';
+            titleGroup.innerHTML =
+                `<span class="slot-name">${slot.label}</span>` +
+                `<span class="slot-timerange">${slot.timeRange} (${slot.maxMin}분)</span>`;
+
+            const right = document.createElement('div');
+            right.className = 'slot-right';
+            right.innerHTML =
+                `<span class="slot-usage">0/${slot.maxMin}분</span>` +
+                `<span class="slot-arrow">▼</span>`;
+
+            header.append(titleGroup, right);
+
+            const body = document.createElement('div');
+            body.className = 'slot-body';
+
+            const progressWrap = document.createElement('div');
+            progressWrap.className = 'progress-wrap';
+            const progressBar = document.createElement('div');
+            progressBar.className  = 'progress-bar';
+            progressBar.style.width = '0%';
+            progressWrap.appendChild(progressBar);
+
+            const overMsg = document.createElement('div');
+            overMsg.className = 'slot-over-msg';
+
+            const list = document.createElement('div');
+            list.className = 'activity-list';
+
+            const fullMsg = document.createElement('div');
+            fullMsg.className = 'slot-full-msg';
+
+            const addBtn = document.createElement('button');
+            addBtn.className   = 'btn-add';
+            addBtn.textContent = '+ 활동 추가';
+            addBtn.addEventListener('click', () => handleAddActivity(block, slot));
+
+            body.append(progressWrap, overMsg, list, fullMsg, addBtn);
+            block.append(header, body);
+            return block;
+        }
+
+        /* ===== 활동 추가 ===== */
+        function handleAddActivity(block, slotDef) {
+            if (sumMinutes(block) >= slotDef.maxMin) {
+                alert(
+                    `${slotDef.label}(은)는 이미 최대 ${slotDef.maxMin}분이 모두 입력되었습니다.\n` +
+                    `기존 활동의 시간을 줄이거나 삭제해 주세요.`
+                );
+                return;
+            }
+            const list = block.querySelector('.activity-list');
+            const card = buildActivityCard(block, slotDef);
+            list.appendChild(card);
+            card.querySelector('select').focus();
+            refreshSlotUI(block, slotDef);
+            scheduleSave();
+        }
+
+        /* ===== 활동 카드 생성 ===== */
+        function buildActivityCard(block, slotDef, initData = null) {
+            const card = document.createElement('div');
+            card.className = 'activity-card';
+
+            const btnRemove = document.createElement('button');
+            btnRemove.type        = 'button';
+            btnRemove.className   = 'btn-remove';
+            btnRemove.title       = '이 활동 삭제';
+            btnRemove.textContent = '✕';
+            btnRemove.addEventListener('click', () => {
+                card.remove();
+                refreshSlotUI(block, slotDef);
+                scheduleSave();
+            });
+
+            const row1 = document.createElement('div');
+            row1.className = 'act-row';
+
+            const subjectField = makeField('과목', 'f-subject', 'select', SUBJECTS);
+            const typeField    = makeField('유형', 'f-type',    'select', TYPES);
+            const timeField    = createTimeStepper(
+                slotDef.maxMin,
+                () => { refreshSlotUI(block, slotDef); scheduleSave(); },
+                initData ? (initData.minutes || 0) : 0
+            );
+
+            if (initData) {
+                if (initData.subject) subjectField.querySelector('select').value = initData.subject;
+                if (initData.type)    typeField.querySelector('select').value    = initData.type;
+            }
+
+            row1.append(subjectField, typeField, timeField);
+
+            const row2 = document.createElement('div');
+            row2.className = 'act-row';
+            const fContent   = makeField('활동내용 (선택)', 'f-content', 'text');
+            const contentInp = fContent.querySelector('input');
+            contentInp.placeholder = '예: 2단원 문제풀이, 교과서 정리...';
+            if (initData && initData.content) contentInp.value = initData.content;
+            row2.appendChild(fContent);
+
+            card.append(btnRemove, row1, row2);
+            return card;
+        }
+
+        /* ===== 필드 헬퍼 ===== */
+        function makeField(labelText, className, type, options) {
+            const wrap = document.createElement('div');
+            wrap.className = `act-field ${className}`;
+            const lbl = document.createElement('label');
+            lbl.textContent = labelText;
+            let input;
+            if (type === 'select') {
+                input = document.createElement('select');
+                (options || []).forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt; o.textContent = opt;
+                    input.appendChild(o);
+                });
+            } else {
+                input = document.createElement('input');
+                input.type = type;
+            }
+            wrap.append(lbl, input);
+            return wrap;
+        }
+
+        /* ===== 시간대 UI 갱신 ===== */
+        function refreshSlotUI(block, slotDef) {
+            const used   = sumMinutes(block);
+            const maxMin = slotDef.maxMin;
+            const remain = maxMin - used;
+            const ratio  = Math.min(used / maxMin, 1);
+
+            const bar     = block.querySelector('.progress-bar');
+            const chip    = block.querySelector('.slot-usage');
+            const overMsg = block.querySelector('.slot-over-msg');
+            const addBtn  = block.querySelector('.btn-add');
+            const fullMsg = block.querySelector('.slot-full-msg');
+
+            bar.style.width = `${(ratio * 100).toFixed(1)}%`;
+            bar.className   = 'progress-bar';
+            if      (used > maxMin)            bar.classList.add('over');
+            else if (remain <= 15 && used > 0) bar.classList.add('warn');
+            else if (used > 0)                 bar.classList.add('filled');
+
+            chip.textContent = `${used}/${maxMin}분`;
+            chip.className   = 'slot-usage';
+            if      (used > maxMin)            chip.classList.add('over');
+            else if (remain <= 15 && used > 0) chip.classList.add('warn');
+            else if (used > 0)                 chip.classList.add('filled');
+
+            if (used > maxMin) {
+                overMsg.textContent =
+                    `⚠️ ${slotDef.label}은 최대 ${maxMin}분입니다. ` +
+                    `현재 ${used}분 — ${used - maxMin}분 초과입니다. 줄여주세요.`;
+                overMsg.classList.add('visible');
+            } else {
+                overMsg.classList.remove('visible');
+            }
+
+            if (used >= maxMin) {
+                addBtn.style.display = 'none';
+                if (fullMsg) {
+                    fullMsg.innerHTML =
+                        `🎉 수고하셨습니다! 열심히 학습하셨군요.` +
+                        `<span class="full-sub">${used}/${maxMin}분 완료</span>`;
+                    fullMsg.classList.add('visible');
+                }
+            } else {
+                addBtn.style.display = '';
+                addBtn.disabled      = false;
+                addBtn.textContent   = '+ 활동 추가';
+                if (fullMsg) fullMsg.classList.remove('visible');
+            }
+        }
+
+        /* ===== 총 입력 시간 합산 ===== */
+        function sumMinutes(block) {
+            let total = 0;
+            block.querySelectorAll('.f-time-step').forEach(el => {
+                const v = parseInt(el.dataset.minutes, 10);
+                if (!isNaN(v) && v > 0) total += v;
+            });
+            return total;
+        }
+
+        /* ===== 패널 빌드 ===== */
+        function buildAllPanels() {
+            for (let d = 0; d < 5; d++) {
+                const panel = document.getElementById(`panel-${d}`);
+                SLOTS.forEach(slot => panel.appendChild(buildSlotBlock(d, slot)));
+            }
+        }
+
+        /* ===== 요일 탭 ===== */
+        function initDayTabs() {
+            const tabs = document.querySelectorAll('.day-tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function () {
+                    tabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+                    document.querySelectorAll('.day-panel').forEach(p => p.classList.remove('active'));
+                    this.classList.add('active');
+                    this.setAttribute('aria-selected','true');
+                    document.getElementById(`panel-${this.dataset.day}`).classList.add('active');
+                });
+            });
+        }
+
+        /* ===== 입력 검증 ===== */
+        function initStudentIdValidation() {
+            const inp = document.getElementById('inp-id');
+            const err = document.getElementById('err-id');
+            inp.addEventListener('input', function () {
+                this.value = this.value.replace(/\D/g, '');
+                const bad = this.value.length > 0 && this.value.length !== 5;
+                this.classList.toggle('has-error', bad);
+                err.classList.toggle('visible', bad);
+            });
+        }
+        function initNameValidation() {
+            const inp = document.getElementById('inp-name');
+            const err = document.getElementById('err-name');
+            inp.addEventListener('blur', function () {
+                const empty = this.value.trim() === '';
+                this.classList.toggle('has-error', empty);
+                err.classList.toggle('visible', empty);
+            });
+            inp.addEventListener('input', function () {
+                if (this.value.trim() !== '') {
+                    this.classList.remove('has-error');
+                    err.classList.remove('visible');
+                }
+            });
+        }
+
+        /* ===== 고정 토글 ===== */
+        function onLockToggle() {
+            const locked = document.getElementById('chk-lock-student').checked;
+            const lbl    = document.getElementById('lock-label');
+            lbl.textContent = locked ? '🔒 학번·이름 고정됨' : '🔓 학번·이름 고정 해제';
+            lbl.classList.toggle('is-locked', locked);
+        }
+
+        /* ===== LocalStorage 자동 저장 ===== */
+        const LS_STUDENT = 'wrs_student';
+        const LS_WEEK    = 'wrs_week';
+        let _saveTimer   = null;
+
+        function scheduleSave() {
+            clearTimeout(_saveTimer);
+            _saveTimer = setTimeout(() => { saveAll(); showSavedIndicator(); }, 400);
+        }
+
+        function saveAll() {
+            const id   = document.getElementById('inp-id').value;
+            const name = document.getElementById('inp-name').value;
+            if (id || name) localStorage.setItem(LS_STUDENT, JSON.stringify({ id, name }));
+
+            const activities = {};
+            for (let d = 0; d < 5; d++) {
+                const panel = document.getElementById(`panel-${d}`);
+                SLOTS.forEach(slot => {
+                    const key   = `${d}_${slot.id}`;
+                    const block = panel.querySelector(`[data-day="${d}"][data-slot="${slot.id}"]`);
+                    activities[key] = [];
+                    if (!block) return;
+                    block.querySelectorAll('.activity-card').forEach(card => {
+                        activities[key].push({
+                            subject: card.querySelector('.f-subject select').value,
+                            type:    card.querySelector('.f-type select').value,
+                            minutes: parseInt(card.querySelector('.f-time-step').dataset.minutes, 10) || 0,
+                            content: card.querySelector('.f-content input').value,
+                        });
+                    });
+                });
+            }
+            localStorage.setItem(LS_WEEK, JSON.stringify({ weekIdx: selectedWeekIdx, activities }));
+        }
+
+        function loadAll() {
+            try {
+                const s = localStorage.getItem(LS_STUDENT);
+                if (s) {
+                    const { id, name } = JSON.parse(s);
+                    if (id)   document.getElementById('inp-id').value   = id;
+                    if (name) document.getElementById('inp-name').value = name;
+                }
+            } catch (e) {}
+            try {
+                const w = localStorage.getItem(LS_WEEK);
+                if (!w) return;
+                const data = JSON.parse(w);
+                if (typeof data.weekIdx === 'number' && data.weekIdx >= 0 && data.weekIdx < WEEKS.length) {
+                    selectedWeekIdx = data.weekIdx;
+                    document.getElementById('sel-week').value = String(selectedWeekIdx);
+                }
+                if (data.activities) {
+                    for (let d = 0; d < 5; d++) {
+                        const panel = document.getElementById(`panel-${d}`);
+                        SLOTS.forEach(slot => {
+                            const key   = `${d}_${slot.id}`;
+                            const cards = data.activities[key];
+                            if (!cards || !cards.length) return;
+                            const block = panel.querySelector(`[data-day="${d}"][data-slot="${slot.id}"]`);
+                            if (!block) return;
+                            const list = block.querySelector('.activity-list');
+                            cards.forEach(initData => list.appendChild(buildActivityCard(block, slot, initData)));
+                            refreshSlotUI(block, slot);
+                        });
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function resetWeek() {
+            const lockStudent = document.getElementById('chk-lock-student').checked;
+            const msg = lockStudent
+                ? '이번 주 학습 데이터를 모두 삭제하시겠습니까?\n\n⚠️ 엑셀 출력 후 초기화하세요.\n학번과 이름은 유지됩니다.'
+                : '학습 데이터와 학번·이름을 모두 삭제하시겠습니까?\n\n⚠️ 이 작업은 되돌릴 수 없습니다.';
+            if (!confirm(msg)) return;
+            localStorage.removeItem(LS_WEEK);
+            if (!lockStudent) {
+                localStorage.removeItem(LS_STUDENT);
+                document.getElementById('inp-id').value   = '';
+                document.getElementById('inp-name').value = '';
+                document.getElementById('chk-lock-student').checked = true;
+                onLockToggle();
+            }
+            selectedWeekIdx = -1;
+            document.getElementById('sel-week').value = '-1';
+            for (let d = 0; d < 5; d++) {
+                const panel = document.getElementById(`panel-${d}`);
+                SLOTS.forEach(slot => {
+                    const block = panel.querySelector(`[data-day="${d}"][data-slot="${slot.id}"]`);
+                    if (!block) return;
+                    block.querySelectorAll('.activity-card').forEach(c => c.remove());
+                    block.classList.remove('open');
+                    refreshSlotUI(block, slot);
+                });
+            }
+        }
+
+        function showSavedIndicator() {
+            const el = document.getElementById('save-indicator');
+            if (!el) return;
+            el.classList.add('visible');
+            clearTimeout(el._hideTimer);
+            el._hideTimer = setTimeout(() => el.classList.remove('visible'), 2000);
+        }
+
+        /* ===== XLSX 출력 (오프라인 내장) ===== */
+        const _CRC_TABLE = (() => {
+            const t = new Uint32Array(256);
+            for (let i = 0; i < 256; i++) {
+                let c = i;
+                for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+                t[i] = c;
+            }
+            return t;
+        })();
+
+        function crc32(bytes) {
+            let crc = 0xFFFFFFFF;
+            for (let i = 0; i < bytes.length; i++) crc = _CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+            return (crc ^ 0xFFFFFFFF) >>> 0;
+        }
+
+        function buildZip(files) {
+            const enc = new TextEncoder();
+            const now     = new Date();
+            const dosTime = ((now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1))&0xFFFF;
+            const dosDate = ((((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate()))&0xFFFF;
+            const entries = files.map(f => {
+                const nameB = enc.encode(f.name);
+                const data  = typeof f.data === 'string' ? enc.encode(f.data) : f.data;
+                return { nameB, data, crc: crc32(data) };
+            });
+            const localParts = [], cdParts = [];
+            let offset = 0;
+            entries.forEach(({ nameB, data, crc }) => {
+                const sz = data.length;
+                const lfh = new Uint8Array(30+nameB.length); const lv = new DataView(lfh.buffer);
+                lv.setUint32(0,0x04034b50,true); lv.setUint16(4,20,true); lv.setUint16(6,0,true);
+                lv.setUint16(8,0,true); lv.setUint16(10,dosTime,true); lv.setUint16(12,dosDate,true);
+                lv.setUint32(14,crc,true); lv.setUint32(18,sz,true); lv.setUint32(22,sz,true);
+                lv.setUint16(26,nameB.length,true); lv.setUint16(28,0,true); lfh.set(nameB,30);
+                const cde = new Uint8Array(46+nameB.length); const cv = new DataView(cde.buffer);
+                cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+                cv.setUint16(8,0,true); cv.setUint16(10,0,true); cv.setUint16(12,dosTime,true);
+                cv.setUint16(14,dosDate,true); cv.setUint32(16,crc,true); cv.setUint32(20,sz,true);
+                cv.setUint32(24,sz,true); cv.setUint16(28,nameB.length,true); cv.setUint16(30,0,true);
+                cv.setUint16(32,0,true); cv.setUint16(34,0,true); cv.setUint16(36,0,true);
+                cv.setUint32(38,0,true); cv.setUint32(42,offset,true); cde.set(nameB,46);
+                localParts.push(lfh,data); cdParts.push(cde);
+                offset += 30+nameB.length+sz;
+            });
+            const cdSize=cdParts.reduce((s,p)=>s+p.length,0);
+            const eocd=new Uint8Array(22); const ev=new DataView(eocd.buffer);
+            ev.setUint32(0,0x06054b50,true); ev.setUint16(4,0,true); ev.setUint16(6,0,true);
+            ev.setUint16(8,entries.length,true); ev.setUint16(10,entries.length,true);
+            ev.setUint32(12,cdSize,true); ev.setUint32(16,offset,true); ev.setUint16(20,0,true);
+            const all=[...localParts,...cdParts,eocd];
+            const total=all.reduce((s,p)=>s+p.length,0);
+            const buf=new Uint8Array(total); let pos=0;
+            for(const p of all){buf.set(p,pos);pos+=p.length;}
+            return buf;
+        }
+
+        function xmlEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+        function colLetter(n){let s='';for(n++;n>0;n=Math.floor((n-1)/26))s=String.fromCharCode(65+(n-1)%26)+s;return s;}
+
+        function buildXlsx(headers, rows) {
+            const allRows=[headers,...rows];
+            const sheetXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>\n`
+                +allRows.map((row,ri)=>`<row r="${ri+1}">`+row.map((cell,ci)=>{const ref=`${colLetter(ci)}${ri+1}`;return typeof cell==='number'?`<c r="${ref}"><v>${cell}</v></c>`:`<c r="${ref}" t="inlineStr"><is><t>${xmlEsc(cell)}</t></is></c>`;}).join('')+`</row>`).join('\n')
+                +`\n</sheetData></worksheet>`;
+            const wbXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="데이터" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+            const wbRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`;
+            const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+            const ct=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`;
+            return buildZip([
+                {name:'[Content_Types].xml',data:ct},
+                {name:'_rels/.rels',data:rootRels},
+                {name:'xl/workbook.xml',data:wbXml},
+                {name:'xl/_rels/workbook.xml.rels',data:wbRels},
+                {name:'xl/worksheets/sheet1.xml',data:sheetXml},
+            ]);
+        }
+
+        function exportExcel() {
+            const id   = document.getElementById('inp-id').value.trim();
+            const name = document.getElementById('inp-name').value.trim();
+            if (!id||id.length!==5) { alert('학번(5자리)을 먼저 입력해주세요.'); return; }
+            if (!name)              { alert('이름을 먼저 입력해주세요.'); return; }
+            if (selectedWeekIdx<0)  { alert('주차를 먼저 선택해주세요.'); return; }
+            const week=WEEKS[selectedWeekIdx], monday=week.mondayDate;
+            const DAYS=['월','화','수','목','금'];
+            let filledSlots=0; const rows=[];
+            for(let d=0;d<5;d++){
+                const date=new Date(monday); date.setDate(monday.getDate()+d);
+                const dateStr=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+                const panel=document.getElementById(`panel-${d}`);
+                SLOTS.forEach(slot=>{
+                    const block=panel.querySelector(`[data-day="${d}"][data-slot="${slot.id}"]`);
+                    if(!block)return;
+                    const slotRows=[];
+                    block.querySelectorAll('.activity-card').forEach(card=>{
+                        const minutes=parseInt(card.querySelector('.f-time-step').dataset.minutes,10)||0;
+                        if(minutes<=0)return;
+                        slotRows.push([id,name,week.shortLabel,dateStr,DAYS[d],slot.label,
+                            card.querySelector('.f-subject select').value,
+                            card.querySelector('.f-type select').value,
+                            minutes,
+                            card.querySelector('.f-content input').value]);
+                    });
+                    if(slotRows.length){filledSlots++;rows.push(...slotRows);}
+                });
+            }
+            if(!confirm(`총 ${5*SLOTS.length}개 시간대 중 ${filledSlots}개 입력됨. 맞나요?\n(데이터 행: ${rows.length}개)`))return;
+            if(!rows.length){alert('입력된 학습 데이터가 없습니다.');return;}
+            const headers=['학번','이름','주차','날짜','요일','시간대','과목','유형','시간(분)','활동내용'];
+            const blob=new Blob([buildXlsx(headers,rows)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+            const url=URL.createObjectURL(blob);
+            const a=document.createElement('a');
+            a.download=`${id}_${name}_${week.shortLabel.replace('주차','주').replace(/\s+/g,'')}.xlsx`;
+            a.href=url; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(()=>URL.revokeObjectURL(url),1000);
+            setTimeout(()=>alert('저장 완료! 🎉\n리로스쿨에 업로드한 다음 초기화를 눌러주세요.'),200);
+        }
+
+        /* ===== 시작점 ===== */
+        function init() {
+            try {
+                buildAllPanels();
+                buildWeekSelect();
+                initDayTabs();
+                initStudentIdValidation();
+                initNameValidation();
+                loadAll();
+                document.getElementById('inp-id').addEventListener('input', scheduleSave);
+                document.getElementById('inp-name').addEventListener('input', scheduleSave);
+                for (var d = 0; d < 5; d++) {
+                    var panel = document.getElementById('panel-' + d);
+                    panel.addEventListener('change', function(e) { if (e.target.closest('.activity-card')) scheduleSave(); });
+                    panel.addEventListener('input',  function(e) { if (e.target.closest('.f-content')) scheduleSave(); });
+                }
+            } catch (err) {
+                var el = document.getElementById('js-check');
+                el.style.display = 'block';
+                el.innerHTML = '&#x26A0;&#xFE0F; 초기화 오류: ' + (err.message || err) +
+                    '<br><span style="font-weight:400;font-size:12px">페이지를 새로고침하거나 Safari에서 다시 열어주세요.</span>';
+            }
+        }
+
+        /* 스크립트가 body 맨 아래에 있으므로 DOM이 이미 준비된 상태 */
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>
